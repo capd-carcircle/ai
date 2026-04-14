@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environment
+venv/
+.venv/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# GCP credentials
+secrets/
+service-account.json
+*.json.key
+
+# Vector store / embeddings cache
+*.index
+*.faiss
+chroma_db/
+vector_store/
+
+# Model cache
+.cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
