@@ -79,7 +79,8 @@ def start_conversation(
             "환자 기록과 공통질문 답변을 분석해서 가장 중요하게 확인해야 할 첫 번째 질문을 해주세요.",
             generation_config=genai.types.GenerationConfig(
                 temperature=0.4,
-                max_output_tokens=300,
+                max_output_tokens=512,
+                response_mime_type="application/json",
             ),
         )
 
@@ -149,7 +150,8 @@ def next_turn(
             patient_answer,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.4,
-                max_output_tokens=300,
+                max_output_tokens=512,
+                response_mime_type="application/json",
             ),
         )
 
