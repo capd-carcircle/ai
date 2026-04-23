@@ -74,17 +74,11 @@ def generate_ai_questions(
             generation_config=genai.types.GenerationConfig(
                 temperature=0.5,
                 max_output_tokens=1024,
+                response_mime_type="application/json",
             ),
         )
 
         text = response.text.strip()
-
-        # ```json ... ``` 블록 처리
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-
         data = json.loads(text)
 
         if isinstance(data, dict) and "question_text" in data:
