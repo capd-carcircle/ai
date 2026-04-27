@@ -1,6 +1,6 @@
 """
 구조화된 설문용 AI 추천 질문 생성 에이전트
-- 환자 투석 기록 이상 수치 기반으로 질문 생성
+- 환자 투석 기록 기반으로 질문 생성 (이상 수치 없어도 반드시 생성)
 - 질문 타입: yes_no / single_select / multi_select / short_text
 - 의사 공통 질문 아래 'AI 추천 질문' 섹션에 표시됨
 - RAG(KDIGO 검색) 컨텍스트 주입 지원
@@ -84,9 +84,24 @@ def generate_ai_questions(
 {kdigo_context}
 """
 
+        # 이상 수치 없을 때: CAPD 루틴 모니터링 카테고리 힌트 주입
+        routine_block = ""
+        if anomaly_text == "이상 수치 없음":
+            routine_block = """
+[오늘 기록에 이상 수치는 없습니다. 아래 CAPD 루틴 모니터링 카테고리 중 오늘 기록에서 더 파악이 필요한 항목을 선택해 질문을 생성하세요]
+- 복막염 초기 증상: 복통, 발열, 투석액 색 변화 여부
+- 수분 균형: 부종(발목·눈두덩이 붓기), 갈증, 호흡 불편감
+- 식이 관리: 염분 섭취, 칼륨 함유 음식(과일·채소) 섭취 여부
+- 투석 시행 상태: 배액 속도 변화, 복부 불편감, 카테터 주변 이상
+- 일반 컨디션: 피로도, 수면의 질, 식욕 변화
+- 활동량: 평소 대비 활동 변화, 운동 여부
+"""
+
         prompt = f"""당신은 CAPD(복막투석) 환자를 담당하는 의료팀의 AI 보조 도구입니다.
-아래 오늘의 투석 기록과 이상 수치 분석, 그리고 환자의 과거 추세를 종합하여 의사에게 환자 상태를 전달하기 위한 추가 질문 3~5개를 생성하세요.
-{history_block}{kdigo_block}
+아래 오늘의 투석 기록과 이상 수치 분석, 그리고 환자의 과거 추세를 종합하여 의사에게 환자 상태를 전달하기 위한 추가 질문을 생성하세요.
+
+⚠️ 중요: 이상 수치가 없더라도 반드시 3~5개의 질문을 생성해야 합니다. 빈 배열은 허용되지 않습니다.
+{history_block}{kdigo_block}{routine_block}
 [오늘 투석 기록]
 {json.dumps(record_data, ensure_ascii=False, indent=2)}
 
@@ -103,7 +118,8 @@ def generate_ai_questions(
 - short_text: 수치나 구체적 설명이 필요한 경우 (예: "소변량이 얼마나 되셨나요?")
 
 [규칙]
-- 이상 수치나 주의가 필요한 항목을 우선으로 하되, KDIGO 가이드라인 기반으로 임상적으로 의미 있는 질문을 생성하세요
+- 이상 수치가 있으면 해당 항목을 우선으로, 없으면 위 루틴 카테고리에서 임상적으로 의미 있는 항목을 선택하세요
+- KDIGO 가이드라인 기반으로 임상적으로 의미 있는 질문을 생성하세요
 - 과거 추세가 있다면 오늘 수치의 변화 방향(악화/개선/지속)을 반영하여 질문하세요
 - KDIGO 지침이 있으면 해당 근거를 바탕으로 질문하세요
 - 대부분 고령 환자임을 감안하여 쉽고 짧은 한국어 표현을 사용하세요 (의학 전문용어 금지)
@@ -151,10 +167,13 @@ def generate_ai_questions(
             for q in data:
                 if "question_text" in q:
                     results.append(_normalize_question(q))
+            if not results:
+                logger.warning("AI 질문 생성 결과가 비어 있습니다 (Gemini가 빈 배열 반환)")
             return results
         elif isinstance(data, dict) and "question_text" in data:
             return [_normalize_question(data)]
 
+        logger.warning("AI 질문 생성 결과 파싱 실패 — 예상치 못한 형식")
         return []
 
     except json.JSONDecodeError as e:
