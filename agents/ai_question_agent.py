@@ -85,7 +85,7 @@ def generate_ai_questions(
 """
 
         prompt = f"""당신은 CAPD(복막투석) 환자를 담당하는 의료팀의 AI 보조 도구입니다.
-아래 오늘의 투석 기록과 이상 수치 분석, 그리고 환자의 과거 추세를 종합하여 의사에게 환자 상태를 전달하기 위한 추가 질문 1개를 생성하세요.
+아래 오늘의 투석 기록과 이상 수치 분석, 그리고 환자의 과거 추세를 종합하여 의사에게 환자 상태를 전달하기 위한 추가 질문 3~5개를 생성하세요.
 {history_block}{kdigo_block}
 [오늘 투석 기록]
 {json.dumps(record_data, ensure_ascii=False, indent=2)}
@@ -103,29 +103,34 @@ def generate_ai_questions(
 - short_text: 수치나 구체적 설명이 필요한 경우 (예: "소변량이 얼마나 되셨나요?")
 
 [규칙]
-- 이상 수치나 주의가 필요한 항목에 집중하세요
+- 이상 수치나 주의가 필요한 항목을 우선으로 하되, KDIGO 가이드라인 기반으로 임상적으로 의미 있는 질문을 생성하세요
+- 과거 추세가 있다면 오늘 수치의 변화 방향(악화/개선/지속)을 반영하여 질문하세요
 - KDIGO 지침이 있으면 해당 근거를 바탕으로 질문하세요
 - 대부분 고령 환자임을 감안하여 쉽고 짧은 한국어 표현을 사용하세요 (의학 전문용어 금지)
 - "심각한", "위험한", "응급" 등 불안감을 줄 수 있는 표현은 사용하지 마세요
 - 이 질문은 진단이 아니라 의사에게 상태를 전달하기 위한 정보 수집입니다
 - 제외된 패턴과 유사한 질문은 만들지 마세요
+- 서로 다른 항목(혈압, 체중, 혈당, UF량, 증상 등)에 대해 다양하게 질문하세요
 - question_text는 40자 이내로 간결하게 작성하세요
 - single_select / multi_select 타입은 반드시 options를 3~5개 제공하세요
 - yes_no / short_text 타입은 options를 null로 설정하세요
 
-아래 JSON 형식으로만 응답하세요:
-{{
-  "question_text": "질문 내용",
-  "question_type": "yes_no" | "single_select" | "multi_select" | "short_text",
-  "options": ["선택지1", "선택지2", "선택지3"] | null,
-  "reason": "이 질문을 생성한 이유 (20자 이내)"
-}}"""
+아래 JSON 배열 형식으로만 응답하세요 (3~5개):
+[
+  {{
+    "question_text": "질문 내용",
+    "question_type": "yes_no" | "single_select" | "multi_select" | "short_text",
+    "options": ["선택지1", "선택지2", "선택지3"] | null,
+    "reason": "이 질문을 생성한 이유 (20자 이내)"
+  }},
+  ...
+]"""
 
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.2,
-                max_output_tokens=512,
+                max_output_tokens=1500,
                 response_mime_type="application/json",
             ),
         )
