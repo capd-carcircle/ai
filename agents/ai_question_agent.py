@@ -162,7 +162,7 @@ def generate_ai_questions(
             _build_prompt(attempt),
             generation_config=genai.types.GenerationConfig(
                 temperature=temperature,
-                max_output_tokens=1800,
+                max_output_tokens=4096,
                 # response_mime_type 제거 — constrained JSON 모드가 배열을 최소화하는 원인
             ),
         )
@@ -174,19 +174,37 @@ def generate_ai_questions(
         text = re.sub(r"\s*```$", "", text)
         text = text.strip()
 
+        data = None
+
+        # 1차: 전체 JSON 파싱
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
-            # JSON 배열 추출 시도
+            pass
+
+        # 2차: 완전한 배열 추출 시도 (코드 앞뒤 잡음 제거)
+        if data is None:
             match = re.search(r"\[.*\]", text, re.DOTALL)
             if match:
                 try:
                     data = json.loads(match.group(0))
                 except json.JSONDecodeError:
-                    logger.warning(f"[attempt={attempt}] JSON 배열 추출 파싱 실패")
-                    return []
+                    pass
+
+        # 3차: 응답이 잘린 경우 — 완성된 객체만 개별 추출 (partial recovery)
+        if data is None:
+            objects = re.findall(r'\{[^{}]*"question_text"[^{}]*\}', text, re.DOTALL)
+            recovered = []
+            for obj_str in objects:
+                try:
+                    recovered.append(json.loads(obj_str))
+                except json.JSONDecodeError:
+                    continue
+            if recovered:
+                logger.warning(f"[attempt={attempt}] 잘린 JSON에서 {len(recovered)}개 객체 부분 복구")
+                data = recovered
             else:
-                logger.warning(f"[attempt={attempt}] JSON 배열 미발견, 원문: {text[:200]}")
+                logger.warning(f"[attempt={attempt}] JSON 파싱 완전 실패, 원문: {text[:300]}")
                 return []
 
         if isinstance(data, list):
