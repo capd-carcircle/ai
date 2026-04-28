@@ -155,8 +155,8 @@ def generate_summary_and_triage(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.2,
-                max_output_tokens=800,
-                response_mime_type="application/json",
+                max_output_tokens=8192,
+                # response_mime_type 제거 — constrained JSON 모드가 출력을 truncate하는 원인
             ),
         )
 
@@ -171,40 +171,53 @@ def _parse_summary_response(text: str) -> dict:
     """응답 파싱 — Gemini가 문자열 값 안에 literal newline을 넣는 경우도 처리"""
     import re
 
-    if "```json" in text:
-        text = text.split("```json")[1].split("```")[0].strip()
-    elif "```" in text:
-        text = text.split("```")[1].split("```")[0].strip()
+    # 코드블록 제거
+    clean = text.strip()
+    if "```json" in clean:
+        clean = clean.split("```json")[1].split("```")[0].strip()
+    elif "```" in clean:
+        clean = clean.split("```")[1].split("```")[0].strip()
 
-    # 1차 시도: 그대로 파싱
+    # 1차 시도: 직접 파싱
     try:
-        data = json.loads(text)
+        data = json.loads(clean)
         return _validate_summary(data)
     except json.JSONDecodeError:
         pass
 
-    # 2차 시도: 문자열 값 안의 literal newline을 \n으로 치환
+    # 2차 시도: 문자열 값 안의 literal newline을 \n으로 치환 후 파싱
     try:
         fixed = re.sub(
             r'("(?:[^"\\]|\\.)*")',
             lambda m: m.group(0).replace('\n', '\\n').replace('\r', ''),
-            text,
+            clean,
         )
         data = json.loads(fixed)
         return _validate_summary(data)
-    except (json.JSONDecodeError, Exception):
+    except Exception:
         pass
 
     # 3차 시도: regex로 각 필드 직접 추출
-    logger.warning(f"요약 JSON 파싱 실패, regex fallback 사용: {text[:80]}")
-    risk_match    = re.search(r'"risk_level"\s*:\s*"(normal|caution|urgent)"', text)
-    summary_match = re.search(r'"ai_summary"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*\})', text)
-    emr_match     = re.search(r'"emr_soap"\s*:\s*"([\s\S]*?)"(?:\s*\})', text)
+    # (?:[^"\\]|\\.)* → 이스케이프된 문자(\\") 포함한 문자열 값 올바르게 추출
+    logger.warning(f"요약 JSON 파싱 실패, regex fallback 사용: {clean[:80]}")
+    risk_match    = re.search(r'"risk_level"\s*:\s*"(normal|caution|urgent)"', clean)
+    summary_match = re.search(r'"ai_summary"\s*:\s*"((?:[^"\\]|\\.)*)"', clean, re.DOTALL)
+    emr_match     = re.search(r'"emr_soap"\s*:\s*"((?:[^"\\]|\\.)*)"',    clean, re.DOTALL)
 
+    if risk_match or summary_match:
+        return {
+            "risk_level": risk_match.group(1) if risk_match else "caution",
+            "ai_summary": summary_match.group(1).replace('\\n', '\n') if summary_match
+                          else "AI 요약 생성에 실패했습니다. 의사가 직접 기록을 확인해 주세요.",
+            "emr_soap":   emr_match.group(1).replace('\\n', '\n') if emr_match else "",
+        }
+
+    # 4차: 완전 실패 — raw JSON을 절대 반환하지 않음
+    logger.error(f"요약 JSON 완전 파싱 실패. 원본(200자): {clean[:200]}")
     return {
-        "risk_level": risk_match.group(1) if risk_match else "caution",
-        "ai_summary": summary_match.group(1).replace('\\n', '\n') if summary_match else text.strip()[:500],
-        "emr_soap":   emr_match.group(1).replace('\\n', '\n') if emr_match else "",
+        "risk_level": "caution",
+        "ai_summary": "AI 요약 생성에 실패했습니다. 의사가 직접 기록을 확인해 주세요.",
+        "emr_soap":   "",
     }
 
 
