@@ -23,6 +23,7 @@ def generate_summary_and_triage(
     conversation_messages: list[dict] = None,  # 하위 호환성 유지 (무시됨)
     historical_context: dict = None,
     rag_context: str = "",
+    patient_profile: dict = None,
 ) -> dict:
     """
     설문 완료 후 위험도 + 요약 + EMR 생성
@@ -102,6 +103,21 @@ def generate_summary_and_triage(
 - 위험도 이력: 긴급 {rs.get('urgent', 0)}회 / 주의 {rs.get('caution', 0)}회 / 정상 {rs.get('normal', 0)}회
 """
 
+        # 환자 프로필 블록 (self_memo + 의사 메모)
+        patient_profile_block = ""
+        if patient_profile:
+            lines = []
+            if patient_profile.get("self_memo"):
+                lines.append(f"  - 환자 자기 기재 특이사항: {patient_profile['self_memo']}")
+            if patient_profile.get("doctor_note"):
+                lines.append(f"  - 담당 의사 임상 메모: {patient_profile['doctor_note']}")
+            if lines:
+                patient_profile_block = (
+                    "\n[환자 개인 프로필]\n"
+                    + "\n".join(lines)
+                    + "\n※ 위 정보를 위험도 판단 및 요약 작성 시 맥락으로 반영하세요.\n"
+                )
+
         # RAG 블록 구성
         rag_block = ""
         if rag_context:
@@ -113,7 +129,8 @@ def generate_summary_and_triage(
 
         prompt = f"""당신은 CAPD(복막투석) 전문 의료 AI입니다.
 아래 환자 데이터와 의학 지침을 바탕으로 위험도 분류, 의사용 요약, EMR(SOAP)을 작성하세요.
-{history_block}{rag_block}
+※ 요약과 EMR은 의사가 읽는 전문 문서입니다. 의학 용어(예: UF volume, peritonitis, hypertension, hyperglycemia, fluid overload, Kt/V 등)를 적극 사용하세요.
+{history_block}{patient_profile_block}{rag_block}
 [오늘 투석 기록]
 {json.dumps(record_data, ensure_ascii=False, indent=2)}
 

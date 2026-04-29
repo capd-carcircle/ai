@@ -49,6 +49,7 @@ class SummaryRequest(BaseModel):
     ai_survey_responses: list[dict] = []        # AI 구조화 설문 응답
     conversation_messages: list[dict] = []      # 하위 호환성 유지 (무시됨)
     historical_context: dict = {}               # 최근 30일 집계 데이터 (선택)
+    patient_profile: dict = {}                  # 환자 프로필 {"self_memo": str, "doctor_note": str}
 
 
 class SummaryResponse(BaseModel):
@@ -62,6 +63,7 @@ class AIQuestionsRequest(BaseModel):
     record_data: dict
     rejected_keys: list[str] = []   # 제외할 패턴 키 목록
     historical_context: dict = {}   # 환자 과거 기록 추세 데이터 (선택)
+    patient_profile: dict = {}      # 환자 프로필 {"self_memo": str, "doctor_note": str}
 
 
 class AIQuestionsResponse(BaseModel):
@@ -90,6 +92,7 @@ def create_summary(body: SummaryRequest):
         ai_survey_responses=body.ai_survey_responses,
         historical_context=body.historical_context or {},
         rag_context=rag_context,
+        patient_profile=body.patient_profile or {},
     )
     return SummaryResponse(**result)
 
@@ -106,5 +109,6 @@ def generate_questions(body: AIQuestionsRequest):
         rejected_keys=body.rejected_keys,
         kdigo_context=kdigo_context,
         historical_context=body.historical_context or {},
+        patient_profile=body.patient_profile or {},
     )
     return AIQuestionsResponse(questions=questions)

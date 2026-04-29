@@ -78,6 +78,7 @@ def generate_ai_questions(
     rejected_keys: list[str] = None,
     kdigo_context: str = "",
     historical_context: dict = None,
+    patient_profile: dict = None,
 ) -> list[dict]:
     """
     환자 투석 기록 기반 AI 맞춤 질문 생성 (3~5개)
@@ -87,6 +88,7 @@ def generate_ai_questions(
         rejected_keys:      제외할 질문 패턴 키 목록
         kdigo_context:      RAG로 검색한 KDIGO·ISPD·MedlinePlus 관련 문단
         historical_context: 최근 30일 집계 데이터 (선택)
+        patient_profile:    환자 프로필 {"self_memo": str, "doctor_note": str} (선택)
 
     Returns:
         [{"question_text", "question_type", "options", "reason"}] 리스트
@@ -125,6 +127,21 @@ def generate_ai_questions(
 - 위험도 이력: 긴급 {rs.get('urgent', 0)}회 / 주의 {rs.get('caution', 0)}회 / 정상 {rs.get('normal', 0)}회
 """
 
+        # 환자 프로필 블록 (self_memo + 의사 메모)
+        patient_profile_block = ""
+        if patient_profile:
+            lines = []
+            if patient_profile.get("self_memo"):
+                lines.append(f"  - 환자 본인 특이사항: {patient_profile['self_memo']}")
+            if patient_profile.get("doctor_note"):
+                lines.append(f"  - 담당 의사 임상 메모: {patient_profile['doctor_note']}")
+            if lines:
+                patient_profile_block = (
+                    "\n[환자 개인 프로필]\n"
+                    + "\n".join(lines)
+                    + "\n※ 위 정보를 참고해 기저질환·특이사항에 맞는 개인화 질문을 생성하세요.\n"
+                )
+
         # 이상 수치 없을 때 루틴 카테고리 힌트 주입
         routine_block = ""
         if anomaly_text == "이상 수치 없음":
@@ -136,7 +153,7 @@ def generate_ai_questions(
 
         prompt = f"""당신은 CAPD(복막투석) 환자를 담당하는 의료 AI 어시스턴트입니다.
 아래 데이터를 종합해 의사가 환자에게 확인할 질문 3~5개를 생성하세요.
-{kdigo_block}{history_block}{routine_block}
+{kdigo_block}{history_block}{patient_profile_block}{routine_block}
 [오늘 투석 기록]
 {json.dumps(record_data, ensure_ascii=False, indent=2)}
 
