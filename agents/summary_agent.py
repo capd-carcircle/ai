@@ -16,11 +16,13 @@ logger = logging.getLogger(__name__)
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 
+MAX_RETRIES = 2
+
+
 def generate_summary_and_triage(
     record_data: dict,
     common_qa: list[dict],
     ai_survey_responses: list[dict] = None,
-    conversation_messages: list[dict] = None,  # 하위 호환성 유지 (무시됨)
     historical_context: dict = None,
     rag_context: str = "",
     patient_profile: dict = None,
@@ -34,7 +36,6 @@ def generate_summary_and_triage(
                               [{"question_text": str, "choice": "yes"|"no"|None, "text_answer": str}]
         ai_survey_responses:  AI 추천 질문 응답 목록
                               [{"question_text": str, "question_type": str, "answer": str}]
-        conversation_messages: 하위 호환성용 (무시됨)
         historical_context:   최근 30일 집계 데이터 (없으면 생략)
                               {
                                 "days": int,
@@ -168,19 +169,28 @@ def generate_summary_and_triage(
   "emr_soap": "S: ...\\nO: ...\\nA: ...\\nP: ..."
 }}"""
 
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.2,
-                max_output_tokens=8192,
-                # response_mime_type 제거 — constrained JSON 모드가 출력을 truncate하는 원인
-            ),
-        )
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                temperature = 0.2 if attempt == 0 else 0.4
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=8192,
+                        # response_mime_type 제거 — constrained JSON 모드가 출력을 truncate하는 원인
+                    ),
+                )
+                return _parse_summary_response(response.text)
+            except Exception as e:
+                if attempt < MAX_RETRIES:
+                    logger.warning(f"요약 생성 {attempt + 1}회차 실패, 재시도 중: {e}")
+                else:
+                    logger.error(f"요약/트리아지 {MAX_RETRIES + 1}회 모두 실패: {e}")
 
-        return _parse_summary_response(response.text)
+        return _fallback_triage(record_data)
 
     except Exception as e:
-        logger.error(f"요약/트리아지 생성 실패: {e}")
+        logger.error(f"요약/트리아지 생성 실패 (프롬프트 구성 단계): {e}")
         return _fallback_triage(record_data)
 
 
@@ -229,13 +239,9 @@ def _parse_summary_response(text: str) -> dict:
             "emr_soap":   emr_match.group(1).replace('\\n', '\n') if emr_match else "",
         }
 
-    # 4차: 완전 실패 — raw JSON을 절대 반환하지 않음
+    # 4차: 완전 실패 — 재시도 루프가 잡을 수 있도록 예외 발생
     logger.error(f"요약 JSON 완전 파싱 실패. 원본(200자): {clean[:200]}")
-    return {
-        "risk_level": "caution",
-        "ai_summary": "AI 요약 생성에 실패했습니다. 의사가 직접 기록을 확인해 주세요.",
-        "emr_soap":   "",
-    }
+    raise ValueError(f"요약 JSON 완전 파싱 실패: {clean[:80]}")
 
 
 def _validate_summary(data: dict) -> dict:

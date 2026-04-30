@@ -71,12 +71,6 @@ def search_kdigo_context(record_data: dict, top_k: int = TOP_K) -> str:
     """
     db: Session = _SessionLocal()
     try:
-        # 청크 존재 여부 확인
-        count = db.execute(text("SELECT COUNT(*) FROM document_chunks")).scalar()
-        if not count:
-            logger.warning("document_chunks 테이블이 비어 있습니다.")
-            return ""
-
         model = _get_model()
         query_text = _record_to_query(record_data)
         query_vec = model.encode(query_text, normalize_embeddings=True).tolist()
