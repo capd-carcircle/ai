@@ -9,7 +9,7 @@ class AISettings(BaseSettings):
     # Vertex AI (ADC 인증 — 서비스 계정 키 불필요)
     GCP_PROJECT_ID: str
     GCP_LOCATION: str = "us-central1"
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-2.0-flash-001"
 
     # Backend DB 연결 (RAG용) — 반드시 .env에 설정 (기본값 없음, 하드코딩 금지)
     DATABASE_URL: str
