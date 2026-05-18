@@ -62,6 +62,52 @@ def _record_to_query(record_data: dict) -> str:
     return " ".join(parts)
 
 
+def search_by_queries(queries: list[str], top_k: int = TOP_K) -> str:
+    """
+    여러 자연어 쿼리로 RAG 검색 (2-LLM 파이프라인 Step 2용)
+    각 쿼리를 개별 검색 후 중복 제거하여 합친 결과 반환.
+
+    Args:
+        queries: LLM이 생성한 임상 쿼리/statement 목록 (최대 5개 사용)
+        top_k:   쿼리당 검색 청크 수
+    """
+    db: Session = _SessionLocal()
+    try:
+        model = _get_model()
+        seen: set = set()
+        chunks: list[str] = []
+
+        for query_text in queries[:5]:
+            if not query_text or not query_text.strip():
+                continue
+            vec = model.encode(query_text.strip(), normalize_embeddings=True).tolist()
+            rows = db.execute(
+                text("""
+                    SELECT source, page_num, chunk_text
+                    FROM document_chunks
+                    ORDER BY embedding <=> CAST(:vec AS vector)
+                    LIMIT :k
+                """),
+                {"vec": str(vec), "k": top_k},
+            ).fetchall()
+
+            for row in rows:
+                key = (row.source, row.page_num)
+                if key not in seen:
+                    seen.add(key)
+                    source = row.source.replace(".pdf", "").replace("-", " ")
+                    chunks.append(f"({source}, p.{row.page_num})\n{row.chunk_text}")
+
+        logger.info(f"멀티쿼리 RAG {len(chunks)}개 청크 검색 완료 (쿼리 {len(queries)}개)")
+        return "\n\n".join(chunks)
+
+    except Exception as e:
+        logger.warning(f"멀티쿼리 RAG 검색 실패 (무시하고 계속): {e}")
+        return ""
+    finally:
+        db.close()
+
+
 def search_kdigo_context(record_data: dict, top_k: int = TOP_K) -> str:
     """
     환자 기록 기반 KDIGO 청크 검색 → 프롬프트 주입용 텍스트 반환

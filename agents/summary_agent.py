@@ -24,6 +24,7 @@ def generate_summary_and_triage(
     historical_context: dict = None,
     rag_context: str = "",
     patient_profile: dict = None,
+    analytics_result: dict = None,
 ) -> dict:
     """
     설문 완료 후 위험도 + 요약 + EMR 생성
@@ -35,14 +36,7 @@ def generate_summary_and_triage(
         ai_survey_responses:  AI 추천 질문 응답 목록
                               [{"question_text": str, "question_type": str, "answer": str}]
         historical_context:   최근 30일 집계 데이터 (없으면 생략)
-                              {
-                                "days": int,
-                                "bp": {"avg": str, "max": str, "min": str, "trend": str},
-                                "weight": {"avg": float, "delta_7d": float, "trend": str},
-                                "uf": {"weekly_avg": list, "trend": str},
-                                "glucose": {"avg": float, "max": float},
-                                "risk_summary": {"urgent": int, "caution": int, "normal": int},
-                              }
+        analytics_result:     analytics.run_all_tasks() 결과 — 있으면 분석 데이터 주입
 
     Returns:
         {
@@ -117,6 +111,41 @@ def generate_summary_and_triage(
                     + "\n※ 위 정보를 위험도 판단 및 요약 작성 시 맥락으로 반영하세요.\n"
                 )
 
+        # 분석 결과 블록 (analytics.run_all_tasks() 결과)
+        analytics_block = ""
+        if analytics_result:
+            lines = ["[데이터 분석 결과 (Python 계산값 — 위험도 판단 근거로 활용)]"]
+
+            # Trend
+            trend_res = analytics_result.get("trend_analysis", {}).get("results", {})
+            if trend_res:
+                lines.append("\n▶ 추세 분석")
+                for attr, res in trend_res.items():
+                    if isinstance(res, dict) and res.get("statement"):
+                        lines.append(f"  · {attr}: {res['statement']}")
+
+            # Anomaly
+            anomaly_res = analytics_result.get("anomaly_detection", {}).get("results", {})
+            if anomaly_res:
+                lines.append("\n▶ 이상 탐지")
+                for attr, res in anomaly_res.items():
+                    if isinstance(res, dict) and res.get("statement"):
+                        lines.append(f"  · {attr}: {res['statement']}")
+
+            # Correlation
+            corr_pairs = analytics_result.get("attribute_correlation", {}).get("results", [])
+            if corr_pairs:
+                lines.append("\n▶ 주요 상관관계 (|r| ≥ 0.5)")
+                for pair in corr_pairs[:5]:
+                    lines.append(f"  · {pair.get('statement', '')}")
+
+            # Anomaly 요약
+            anomaly_attrs = analytics_result.get("anomaly_attrs", [])
+            if anomaly_attrs:
+                lines.append(f"\n⚠️ 이상 감지 속성: {', '.join(anomaly_attrs)}")
+
+            analytics_block = "\n".join(lines) + "\n"
+
         # RAG 블록 구성
         rag_block = ""
         if rag_context:
@@ -129,7 +158,7 @@ def generate_summary_and_triage(
         prompt = f"""당신은 CAPD(복막투석) 전문 의료 AI입니다.
 아래 환자 데이터와 의학 지침을 바탕으로 위험도 분류, 구조화된 임상 요약, EMR(SOAP)을 작성하세요.
 ※ 요약과 EMR은 의사가 읽는 전문 문서입니다. 의학 용어(예: UF volume, peritonitis, hypertension, hyperglycemia, fluid overload, Kt/V 등)를 적극 사용하세요.
-{history_block}{patient_profile_block}{rag_block}
+{analytics_block}{history_block}{patient_profile_block}{rag_block}
 [오늘 투석 기록]
 {json.dumps(record_data, ensure_ascii=False, indent=2)}
 
