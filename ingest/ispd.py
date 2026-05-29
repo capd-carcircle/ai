@@ -44,15 +44,19 @@ from ai.ingest.base import (
 INGEST_DIR = Path(__file__).resolve().parent
 
 
-def extract_text_by_page(pdf_path: Path) -> list[tuple[int, str]]:
-    """PDF에서 페이지별 텍스트 추출. [(page_num, text), ...]"""
+def extract_full_text(pdf_path: Path) -> str:
+    """PDF 전체 텍스트를 하나의 문자열로 추출 (페이지 경계 제거).
+
+    페이지별 추출 시 저널 페이지 번호("Li et al. 113", "Peritoneal Dialysis
+    International 42(2)" 등)가 본문 중간에 삽입되어 문장이 끊기는 문제를 방지.
+    """
     reader = PdfReader(str(pdf_path))
-    pages = []
-    for i, page in enumerate(reader.pages, start=1):
+    pages_text = []
+    for page in reader.pages:
         text = (page.extract_text() or "").strip()
         if text:
-            pages.append((i, text))
-    return pages
+            pages_text.append(text)
+    return " ".join(pages_text)
 
 
 def ingest(clear: bool = False):
@@ -84,13 +88,14 @@ def ingest(clear: bool = False):
                 deleted = delete_chunks_by_source(db, source)
                 logger.info(f"  → 기존 {deleted}개 청크 삭제")
 
-            pages = extract_text_by_page(pdf_path)
-            logger.info(f"  → {len(pages)}개 페이지 추출")
+            # 전체 텍스트 합치기 → 페이지 경계 절단 방지
+            full_text = extract_full_text(pdf_path)
+            logger.info(f"  → 전체 텍스트 {len(full_text)}자 추출")
 
-            chunks_with_pages: list[tuple[int, str]] = []
-            for page_num, page_text in pages:
-                for chunk in chunk_text(page_text):
-                    chunks_with_pages.append((page_num, chunk))
+            # page_num=None (페이지 정보 없이 전체 단위 청킹)
+            chunks_with_pages: list[tuple[None, str]] = [
+                (None, c) for c in chunk_text(full_text)
+            ]
 
             logger.info(f"  → {len(chunks_with_pages)}개 청크 생성, 임베딩 시작")
             saved = save_chunks(db, source, chunks_with_pages, model)

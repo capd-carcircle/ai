@@ -92,11 +92,14 @@ def search_by_queries(queries: list[str], top_k: int = TOP_K) -> str:
             ).fetchall()
 
             for row in rows:
-                key = (row.source, row.page_num)
+                # 내용 앞 120자 기반 dedup — 구 방식 (source, page_num)은
+                # 동일 페이지의 서로 다른 청크를 버리는 버그가 있었음
+                key = row.chunk_text[:120]
                 if key not in seen:
                     seen.add(key)
                     source = row.source.replace(".pdf", "").replace("-", " ")
-                    chunks.append(f"({source}, p.{row.page_num})\n{row.chunk_text}")
+                    page_info = f"p.{row.page_num}" if row.page_num else "full-text"
+                    chunks.append(f"({source}, {page_info})\n{row.chunk_text}")
 
         logger.info(f"멀티쿼리 RAG {len(chunks)}개 청크 검색 완료 (쿼리 {len(queries)}개)")
         return "\n\n".join(chunks)

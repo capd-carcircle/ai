@@ -15,8 +15,8 @@ from sqlalchemy.orm import sessionmaker, Session
 logger = logging.getLogger(__name__)
 
 EMBED_MODEL = "all-MiniLM-L6-v2"   # KDIGO와 동일 모델 (384차원)
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 50
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 150
 BATCH_SIZE = 8
 
 
