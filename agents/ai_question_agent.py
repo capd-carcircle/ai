@@ -265,9 +265,26 @@ def _generate_patient_questions(
                 lines.append(f"  - {q_text} → {answer}")
         if lines:
             common_qa_block = (
-                "\n[환자가 이미 답변한 공통 질문 — AI 질문과 중복되지 않도록 참고]\n"
+                "\n[환자가 이미 답변한 공통 질문 — 동일하거나 유사한 의미의 질문 절대 생성 금지]\n"
                 + "\n".join(lines) + "\n"
             )
+
+    # 기록지 수치 재확인 금지 블록
+    record_fields_block = f"""
+[기록지에서 이미 수집된 값 — 아래 항목을 그대로 재확인하는 질문 절대 생성 금지]
+이 값들은 환자가 이미 기록지에 입력한 것이므로 다시 물어보는 것은 의미 없음.
+단, 이 값을 근거로 기록지에 없는 주관적 증상·원인·맥락을 묻는 후속 질문은 허용.
+
+- 복막액 혼탁 여부: {record_data.get('turbid_peritoneal')}
+- 혈압: {record_data.get('blood_pressure')}
+- 체중: {record_data.get('weight')}kg
+- 소변 횟수: {record_data.get('urine_count')}회
+- 공복혈당: {record_data.get('fasting_blood_glucose')}mg/dL
+- 교환 회차별 배액량·주입량·농도·UF: 아래 기록지 데이터 참고
+
+금지 예시: "오늘 복막액이 혼탁했나요?" (기록지에 이미 있음)
+허용 예시: "복막액이 혼탁한 것 외에 복통이나 발열도 있었나요?" (기록지에 없는 정보)
+"""
 
     # 이상 없을 때 루틴 힌트
     routine_block = ""
@@ -282,7 +299,7 @@ def _generate_patient_questions(
 
     prompt = f"""당신은 CAPD(복막투석) 환자를 담당하는 의료 AI 어시스턴트입니다.
 아래 데이터를 종합해 의사가 환자에게 확인할 질문 3~5개를 생성하세요.
-{rag_block}{queries_block}{analytics_text}{profile_block}{common_qa_block}{routine_block}
+{rag_block}{queries_block}{analytics_text}{profile_block}{common_qa_block}{record_fields_block}{routine_block}
 [오늘 투석 기록]
 {json.dumps(record_data, ensure_ascii=False, indent=2)}
 
