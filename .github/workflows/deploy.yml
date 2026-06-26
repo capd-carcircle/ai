@@ -81,9 +81,7 @@ jobs:
           region: asia-northeast3
           flags: >-
             --service-account=capd-runner@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-            --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:asia-northeast3:capd-db
-            --set-secrets=DATABASE_URL=DATABASE_URL:latest
-            --set-env-vars=GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCP_LOCATION=asia-northeast3,GEMINI_MODEL=gemini-2.5-flash
+            --set-env-vars=DATABASE_URL=${{ secrets.DATABASE_URL }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCP_LOCATION=asia-northeast3,GEMINI_MODEL=gemini-2.5-flash
             --allow-unauthenticated
             --port=8001
             --memory=2Gi
