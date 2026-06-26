@@ -9,6 +9,7 @@ ai_question_agent.py / summary_agent.py에서 반복되던 패턴 통합:
 import json
 import logging
 import re
+import time
 from typing import Any
 
 from google import genai
@@ -59,6 +60,10 @@ def generate_with_retry(
         except Exception as e:
             last_error = e
             logger.warning(f"generate_content 실패 (attempt {attempt + 1}/{max_retries + 1}): {e}")
+            if "429" in str(e) and attempt < max_retries:
+                wait = 60 * (attempt + 1)
+                logger.info(f"429 RPM 초과 — {wait}초 대기 후 재시도")
+                time.sleep(wait)
 
     raise ValueError(f"Gemini 호출 {max_retries + 1}회 모두 실패: {last_error}")
 
