@@ -50,7 +50,7 @@ app.add_middleware(
     allow_origins=[
         "http://backend:8000",
         "http://localhost:8000",
-        "https://capd-backend-cdwaxwdxfa-du.a.run.app",
+        "https://capd-backend-675812688902.asia-northeast3.run.app",
     ],
     allow_methods=["POST", "GET"],
     allow_headers=["Content-Type", "Authorization"],
