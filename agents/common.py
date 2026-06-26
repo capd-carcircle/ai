@@ -11,20 +11,30 @@ import logging
 import re
 from typing import Any
 
-from vertexai.generative_models import GenerationConfig, GenerativeModel
+from google import genai
+from google.genai import types
 
-from ai.config import settings  # noqa: F401 — vertexai.init() 호출 포함
+from ai.config import settings
 
 logger = logging.getLogger(__name__)
 
+_client: genai.Client | None = None
 
-def get_gemini_model() -> GenerativeModel:
-    """설정된 GEMINI_MODEL로 GenerativeModel 인스턴스 반환."""
-    return GenerativeModel(model_name=settings.GEMINI_MODEL)
+
+def get_genai_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return _client
+
+
+def get_gemini_model():
+    """하위 호환용 — client 반환."""
+    return get_genai_client()
 
 
 def generate_with_retry(
-    model: GenerativeModel,
+    model,
     prompt: str,
     *,
     temperature: float = 0.3,
@@ -32,27 +42,15 @@ def generate_with_retry(
     max_retries: int = 2,
     retry_temperature_delta: float = 0.2,
 ) -> str:
-    """
-    Gemini generate_content 호출 + 실패 시 재시도.
-
-    Args:
-        model: GenerativeModel 인스턴스
-        prompt: 프롬프트 문자열
-        temperature: 초기 temperature
-        max_output_tokens: 최대 출력 토큰
-        max_retries: 최대 재시도 횟수 (초기 시도 제외)
-        retry_temperature_delta: 재시도 시 temperature 증가량
-
-    Returns:
-        응답 텍스트 (str). 모든 시도 실패 시 ValueError 발생.
-    """
+    client = get_genai_client()
     last_error: Exception | None = None
     for attempt in range(max_retries + 1):
         current_temp = min(temperature + retry_temperature_delta * attempt, 1.0)
         try:
-            resp = model.generate_content(
-                prompt,
-                generation_config=GenerationConfig(
+            resp = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
                     temperature=current_temp,
                     max_output_tokens=max_output_tokens,
                 ),

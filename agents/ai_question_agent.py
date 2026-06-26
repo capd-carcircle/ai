@@ -12,15 +12,16 @@ AI 맞춤 질문 생성 에이전트 (2-LLM 파이프라인)
 SSE 스트리밍:
   generate_questions_stream() — async generator, 질문 하나씩 yield
 """
+import asyncio
 import json
 import logging
 import re
 from typing import AsyncGenerator
 
-from vertexai.generative_models import GenerativeModel, GenerationConfig
+from google.genai import types
 
-from ai.agents.common import get_gemini_model
-from ai.config import settings  # noqa: F401 — vertexai.init() 호출 포함
+from ai.agents.common import get_genai_client, generate_with_retry
+from ai.config import settings
 from ai.rag.retriever import search_by_queries, search_kdigo_context
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ def _generate_clinical_queries(
     record_data: dict,
     analytics_text: str,
     patient_profile: dict,
-    model: GenerativeModel,
+    model=None,
 ) -> list[str]:
     """
     분석 결과 + 오늘 기록 → RAG 검색용 임상 쿼리 5~10개 생성 (영어)
@@ -201,11 +202,8 @@ Rules:
 ]"""
 
     try:
-        resp = model.generate_content(
-            prompt,
-            generation_config=GenerationConfig(temperature=0.3, max_output_tokens=4096),
-        )
-        queries = _parse_queries(resp.text)
+        text = generate_with_retry(None, prompt, temperature=0.3, max_output_tokens=1024)
+        queries = _parse_queries(text)
         logger.info(f"LLM 1: 임상 쿼리 {len(queries)}개 생성")
         return queries
     except Exception as e:
@@ -352,7 +350,7 @@ def _generate_patient_questions(
     rejected_keys: list[str],
     patient_profile: dict,
     has_anomaly: bool,
-    model: GenerativeModel,
+    model=None,
     temperature: float = 0.5,
     common_question_responses: list[dict] = None,
 ) -> list[dict]:
@@ -363,11 +361,8 @@ def _generate_patient_questions(
         common_question_responses or [],
     )
     try:
-        resp = model.generate_content(
-            prompt,
-            generation_config=GenerationConfig(temperature=temperature, max_output_tokens=4096),
-        )
-        return _parse_questions(resp.text)
+        text = generate_with_retry(None, prompt, temperature=temperature, max_output_tokens=4096)
+        return _parse_questions(text)
     except Exception as e:
         logger.warning(f"LLM 2 질문 생성 실패 (temperature={temperature}): {e}")
         return []
@@ -375,19 +370,19 @@ def _generate_patient_questions(
 
 async def _stream_patient_questions(
     prompt: str,
-    model: GenerativeModel,
+    model=None,
     temperature: float = 0.5,
 ) -> AsyncGenerator[dict, None]:
     """
     Gemini 스트리밍 API로 JSON 객체를 하나씩 실시간 파싱해서 yield.
-
-    Gemini는 JSON 배열 전체를 토큰 단위로 스트리밍 출력한다.
-    중괄호 깊이(brace depth)를 추적해서 완성된 `{...}` 객체가 나올 때마다 즉시 yield.
     """
-    response = await model.generate_content_async(
-        prompt,
-        generation_config=GenerationConfig(temperature=temperature, max_output_tokens=4096),
-        stream=True,
+    from ai.agents.common import get_genai_client
+    client = get_genai_client()
+    response = await asyncio.to_thread(
+        client.models.generate_content,
+        model=settings.GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(temperature=temperature, max_output_tokens=4096),
     )
 
     buffer = ""
@@ -395,9 +390,8 @@ async def _stream_patient_questions(
     in_string = False
     escape_next = False
 
-    async for chunk in response:
-        text = getattr(chunk, "text", "") or ""
-        for char in text:
+    full_text = response.text or ""
+    for char in full_text:
             # 이스케이프 처리
             if escape_next:
                 escape_next = False
@@ -469,7 +463,7 @@ def generate_ai_questions(
     common_question_responses  = common_question_responses or []
 
     try:
-        model = get_gemini_model()
+        model = None  # google-genai: generate_with_retry에서 직접 client 사용
 
         # analytics_result 여부로 파이프라인 분기
         if analytics_result:
@@ -495,7 +489,7 @@ def _pipeline_2llm(
     rejected_keys: list[str],
     patient_profile: dict,
     analytics_result: dict,
-    model: GenerativeModel,
+    model=None,
     common_question_responses: list[dict] = None,
 ) -> list[dict]:
     """2-LLM 파이프라인 실행"""
@@ -573,7 +567,7 @@ async def generate_questions_stream(
     common_question_responses = common_question_responses or []
 
     try:
-        model = get_gemini_model()
+        model = None  # google-genai: generate_with_retry에서 직접 client 사용
 
         if not analytics_result:
             # analytics 없으면 legacy 동기 방식 폴백
@@ -660,7 +654,7 @@ def _pipeline_legacy(
     kdigo_context: str,
     historical_context: dict,
     patient_profile: dict,
-    model: GenerativeModel,
+    model=None,
 ) -> list[dict]:
     """기존 단일 LLM 방식 — analytics_result 없을 때 폴백"""
     if not kdigo_context:
