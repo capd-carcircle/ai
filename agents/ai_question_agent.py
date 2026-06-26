@@ -203,7 +203,7 @@ Rules:
     try:
         resp = model.generate_content(
             prompt,
-            generation_config=GenerationConfig(temperature=0.3, max_output_tokens=1024),
+            generation_config=GenerationConfig(temperature=0.3, max_output_tokens=4096),
         )
         queries = _parse_queries(resp.text)
         logger.info(f"LLM 1: 임상 쿼리 {len(queries)}개 생성")
