@@ -61,7 +61,7 @@ def generate_with_retry(
             last_error = e
             logger.warning(f"generate_content 실패 (attempt {attempt + 1}/{max_retries + 1}): {e}")
             if "429" in str(e) and attempt < max_retries:
-                wait = 60 * (attempt + 1)
+                wait = 20 * (attempt + 1)
                 logger.info(f"429 RPM 초과 — {wait}초 대기 후 재시도")
                 time.sleep(wait)
 
