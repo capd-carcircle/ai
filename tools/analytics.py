@@ -97,7 +97,6 @@ _TREND_THRESH = {
     "dwell_mean_minutes":     {"much": 60,   "normal": 30},
     "concentration_max":      {"much": 1.0,  "normal": 0.5},
     "calculated_uf_sum_g":    {"pct_much": 20, "pct_normal": 10},
-    "recorded_uf_sum_g":      {"pct_much": 20, "pct_normal": 10},
     "infused_sum_g":          {"pct_much": 20, "pct_normal": 10},
 }
 
@@ -112,7 +111,6 @@ _UNITS = {
     "dwell_mean_minutes":     "분",
     "concentration_max":      "%",
     "calculated_uf_sum_g":    "g",
-    "recorded_uf_sum_g":      "g",
     "infused_sum_g":          "g",
 }
 
@@ -201,11 +199,12 @@ def task1_trend_analysis(today_row: dict, historical_rows: list[dict]) -> dict:
 # Task 2: Anomaly Detection
 # ================================================================
 
+# reported_total_uf_g·recorded_uf_sum_g는 여기 포함하지 않음 — 셋 다 "배액량-주입량"이라는
+# 같은 원본에서 나온 같은 값이라(프론트가 회차별/일별 제수량을 전부 자동 계산해서 저장,
+# 환자가 독립적으로 입력하는 경로가 없음) calculated_uf_sum_g 하나만 대표로 씀.
 ANOMALY_ATTRS = [
     "body_weight_kg",
-    "reported_total_uf_g",
     "calculated_uf_sum_g",
-    "recorded_uf_sum_g",
     "systolic_bp",
     "diastolic_bp",
     "mean_arterial_pressure",
@@ -285,11 +284,12 @@ def task2_anomaly_detection(today_row: dict, historical_rows: list[dict]) -> dic
 # Task 3: Attribute Correlation (Spearman)
 # ================================================================
 
+# reported_total_uf_g·recorded_uf_sum_g는 여기 포함하지 않음 — 셋 다 "배액량-주입량"이라는
+# 같은 원본에서 나온 같은 값이라(프론트가 회차별/일별 제수량을 전부 자동 계산해서 저장,
+# 환자가 독립적으로 입력하는 경로가 없음) calculated_uf_sum_g 하나만 대표로 씀.
 CORR_ATTRS = [
     "body_weight_kg",
-    "reported_total_uf_g",
     "calculated_uf_sum_g",
-    "recorded_uf_sum_g",
     "systolic_bp",
     "diastolic_bp",
     "mean_arterial_pressure",
