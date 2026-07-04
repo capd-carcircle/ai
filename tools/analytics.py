@@ -412,13 +412,16 @@ def task4_eda(today_row: dict, historical_rows: list[dict]) -> dict:
 # 통합 실행
 # ================================================================
 
-def run_all_tasks(today_row: dict, historical_rows: list[dict]) -> dict:
+def run_all_tasks(today_row: dict, historical_rows: list[dict], window: int = 30) -> dict:
     """
     4가지 분석 Task 모두 실행
 
     Args:
         today_row:       build_daily_model_row()로 생성한 오늘 Daily Model Row
         historical_rows: 최신->과거 순 Daily Model Row 리스트 (오늘 제외)
+        window:          task3(상관관계)에 쓸 최근 며칠치 기준(기본 30일).
+                         task1/2/4는 "오늘 vs 7일/30일 평균"이라는 고정된 통계 정의라
+                         window와 무관하게 항상 7일·30일 기준 그대로 계산함(의도된 동작).
 
     Returns:
         {
@@ -432,7 +435,7 @@ def run_all_tasks(today_row: dict, historical_rows: list[dict]) -> dict:
     """
     trend   = task1_trend_analysis(today_row, historical_rows)
     anomaly = task2_anomaly_detection(today_row, historical_rows)
-    corr    = task3_attribute_correlation(historical_rows)
+    corr    = task3_attribute_correlation(historical_rows, window=window)
     eda     = task4_eda(today_row, historical_rows)
 
     anomaly_attrs = [
