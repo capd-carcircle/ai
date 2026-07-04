@@ -136,11 +136,13 @@ def _format_analytics_for_prompt(analytics_result: dict) -> str:
             if isinstance(res, dict):
                 lines.append(f"  · {attr}: {res.get('statement', '')}")
 
-    # Correlation
+    # Correlation — task3는 이제 |r| 무관하게 전체 쌍을 반환하므로, LLM에는
+    # 그중 |r| >= 0.5인 것만(정렬돼 있으니 앞에서부터) 최대 5쌍 주입
     corr_results = analytics_result.get("attribute_correlation", {}).get("results", [])
-    if corr_results:
+    strong_pairs = [p for p in corr_results if abs(p.get("correlation", 0)) >= 0.5]
+    if strong_pairs:
         lines.append("\n▶ 속성 상관관계 (|r| ≥ 0.5)")
-        for pair in corr_results[:5]:  # 상위 5쌍만
+        for pair in strong_pairs[:5]:  # 상위 5쌍만
             lines.append(f"  · {pair.get('statement', '')}")
 
     # Anomaly 요약

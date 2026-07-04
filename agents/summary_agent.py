@@ -131,11 +131,13 @@ def generate_summary_and_triage(
                     if isinstance(res, dict) and res.get("statement"):
                         lines.append(f"  · {attr}: {res['statement']}")
 
-            # Correlation
+            # Correlation — task3는 이제 |r| 무관하게 전체 쌍을 반환하므로, LLM에는
+            # 그중 |r| >= 0.5인 것만(정렬돼 있으니 앞에서부터) 최대 5쌍 주입
             corr_pairs = analytics_result.get("attribute_correlation", {}).get("results", [])
-            if corr_pairs:
+            strong_pairs = [p for p in corr_pairs if abs(p.get("correlation", 0)) >= 0.5]
+            if strong_pairs:
                 lines.append("\n▶ 주요 상관관계 (|r| ≥ 0.5)")
-                for pair in corr_pairs[:5]:
+                for pair in strong_pairs[:5]:
                     lines.append(f"  · {pair.get('statement', '')}")
 
             # Anomaly 요약
