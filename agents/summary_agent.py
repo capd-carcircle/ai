@@ -7,7 +7,7 @@
 import json
 import logging
 
-from ai.agents.common import generate_with_retry
+from ai.agents.common import generate_with_retry, get_gemini_model
 from ai.config import settings
 
 logger = logging.getLogger(__name__)
